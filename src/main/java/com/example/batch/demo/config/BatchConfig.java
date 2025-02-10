@@ -11,7 +11,6 @@ import org.springframework.batch.core.configuration.annotation.StepBuilderFactor
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.*;
 import org.springframework.batch.item.file.MultiResourceItemReader;
-import org.springframework.batch.item.file.ResourceAwareItemReaderItemStream;
 import org.springframework.batch.item.support.CompositeItemWriter;
 import org.springframework.batch.item.xml.StaxEventItemReader;
 import org.springframework.batch.repeat.RepeatStatus;
@@ -23,11 +22,9 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.oxm.jaxb.Jaxb2Marshaller;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 @Configuration
@@ -35,26 +32,28 @@ import java.util.List;
 public class BatchConfig {
 
     @Autowired
-    public JobBuilderFactory jobBuilderFactory;
+    private JobBuilderFactory jobBuilderFactory;
 
     @Autowired
-    public StepBuilderFactory stepBuilderFactory;
+    private StepBuilderFactory stepBuilderFactory;
 
-    private List<Resource> processedResources = new ArrayList<>();
+    private final List<Resource> processedResources = new ArrayList<>();
 
+    private static final String FILE_DIRECTORY = "file:D:/Integrations/batch-test/students/*.xml";
+
+    // Main Batch Job Configuration
     @Bean
     public Job importStudentJob() {
         return jobBuilderFactory.get("importStudentJob")
                 .start(checkForFilesStep())
-                .on("NO_FILES")  // Custom status if no files are found
-                .to(noOpStep())  // Skip processing if no files are detected
+                .on("NO_FILES").to(noOpStep())    // No files, go to noOpStep
                 .from(checkForFilesStep())
-                .on("*")         // Process normally if files are found
-                .to(studentStep())
+                .on("*").to(studentStep())        // Files exist, process them
                 .end()
                 .build();
     }
 
+    // Step 1: Check if files are present
     @Bean
     public Step checkForFilesStep() {
         return stepBuilderFactory.get("checkForFilesStep")
@@ -71,6 +70,7 @@ public class BatchConfig {
                 .build();
     }
 
+    // Step 2: Process students
     @Bean
     public Step studentStep() {
         return stepBuilderFactory.get("studentStep")
@@ -82,6 +82,7 @@ public class BatchConfig {
                 .build();
     }
 
+    // Fallback Step: Do nothing if no files are present
     @Bean
     public Step noOpStep() {
         return stepBuilderFactory.get("noOpStep")
@@ -92,25 +93,26 @@ public class BatchConfig {
                 .build();
     }
 
+    // Reader for files
     @Bean
     @StepScope
     public ItemStreamReader<Student> studentReader() {
-        // Clears the processed files list for the current job execution
-        processedResources.clear();
-
+        processedResources.clear();  // Clear the list for every job execution
         Resource[] resources = getResources();
-        if (resources.length == 0) {
+
+        if (resources.length == 0) { // Return an empty reader if no files are present
             System.out.println("No files found. Using empty reader.");
             return emptyItemReader();
         }
 
         MultiResourceItemReader<Student> reader = new MultiResourceItemReader<>();
-        reader.setResources(resources); // Dynamically assign resources
+        reader.setResources(resources);
         reader.setDelegate(studentItemReader());
         processedResources.addAll(Arrays.asList(resources));
         return reader;
     }
 
+    // Handle case with no resources
     @Bean
     public ItemStreamReader<Student> emptyItemReader() {
         return new ItemStreamReader<Student>() {
@@ -118,29 +120,31 @@ public class BatchConfig {
             public Student read() {
                 return null;
             }
+
             @Override
-            public void open(ExecutionContext executionContext) throws ItemStreamException { }
+            public void open(ExecutionContext executionContext) { }
+
             @Override
-            public void update(ExecutionContext executionContext) throws ItemStreamException { }
+            public void update(ExecutionContext executionContext) { }
+
             @Override
-            public void close() throws ItemStreamException { }
+            public void close() { }
         };
     }
 
-//    @Bean
-    public Resource[] getResources() {
+    // Read resources from the directory
+    private Resource[] getResources() {
         try {
-            // Fetch all XML files in the directory
-            Resource[] resources = new PathMatchingResourcePatternResolver()
-                    .getResources("file:D:/Integrations/batch-test/students/*.xml");
+            Resource[] resources = new PathMatchingResourcePatternResolver().getResources(FILE_DIRECTORY);
             System.out.println("Detected files: " + Arrays.toString(resources));
             return resources;
         } catch (IOException e) {
-            System.out.println("Error reading resources: " + e);
-            return new Resource[0]; // Return an empty array if an error occurs
+            System.err.println("Error reading resources: " + e.getMessage());
+            return new Resource[0];
         }
     }
 
+    // XML Reader (specific to Student format)
     @Bean
     public StaxEventItemReader<Student> studentItemReader() {
         StaxEventItemReader<Student> reader = new StaxEventItemReader<>();
@@ -157,6 +161,7 @@ public class BatchConfig {
         return unmarshaller;
     }
 
+    // Processor
     @Bean
     public ItemProcessor<Student, Student> studentItemProcessor() {
         return student -> {
@@ -165,40 +170,17 @@ public class BatchConfig {
         };
     }
 
-    @Bean
-    public ItemWriter<Student> studentItemWriter() {
-        return items -> {
-            for (Student student : items) {
-                System.out.println("Writing student to database: " + student);
-            }
-        };
-    }
-
-    @Bean
-    public ItemWriter<Student> fileMovingItemWriter() {
-        return items -> {
-            System.out.println("Moving file after processing");
-            for (Resource resource : processedResources) {
-                try {
-                    Path sourcePath = Paths.get(resource.getURI());
-                    Path targetPath = sourcePath.getParent().resolve("done").resolve(sourcePath.getFileName());
-                    Files.createDirectories(targetPath.getParent());
-                    Files.move(sourcePath, targetPath);
-                    System.out.println("Moved file from " + sourcePath + " to " + targetPath);
-                } catch (IOException e) {
-                    System.out.println("Error moving file: " + e);
-                }
-            }
-            processedResources.clear();
-        };
-    }
-
+    // Writer Composite: Currently writing only to the database
     @Bean
     public CompositeItemWriter<Student> compositeItemWriter() {
         CompositeItemWriter<Student> writer = new CompositeItemWriter<>();
-        writer.setDelegates(Arrays.asList(studentItemWriter()));
-        // writer.setDelegates(Arrays.asList(studentItemWriter(),
-        // fileMovingItemWriter()));
+        writer.setDelegates(Collections.singletonList(studentItemWriter())); // Add more writers if needed
         return writer;
+    }
+
+    // Writer: Write to database
+    @Bean
+    public ItemWriter<Student> studentItemWriter() {
+        return items -> items.forEach(student -> System.out.println("Writing student to database: " + student));
     }
 }

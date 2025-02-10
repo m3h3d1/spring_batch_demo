@@ -26,26 +26,25 @@ public class FileMovingStepExecutionListener extends StepExecutionListenerSuppor
             try {
                 if (!resource.exists()) {
                     System.out.println("File " + resource.getFilename() + " does not exist, skipping move.");
-                    continue; // Skip non-existent files
+                    continue;
                 }
                 Path sourcePath = Paths.get(resource.getURI());
-                Path targetDir = sourcePath.getParent().resolve("done");
-                Files.createDirectories(targetDir);
-                Path targetPath = targetDir.resolve(sourcePath.getFileName());
+                Path targetPath = sourcePath.getParent().resolve("done").resolve(sourcePath.getFileName());
+                Files.createDirectories(targetPath.getParent());
 
-                // Handle possible file name conflicts
+                // Handle file conflicts
                 if (Files.exists(targetPath)) {
                     String fileName = sourcePath.getFileName().toString();
                     int dotIndex = fileName.lastIndexOf('.');
                     String baseName = (dotIndex == -1) ? fileName : fileName.substring(0, dotIndex);
                     String extension = (dotIndex == -1) ? "" : fileName.substring(dotIndex);
-                    targetPath = targetDir.resolve(baseName + "_" + System.currentTimeMillis() + extension);
+                    targetPath = targetPath.getParent().resolve(baseName + "_" + System.currentTimeMillis() + extension);
                 }
 
-                Files.move(sourcePath, targetPath); // Move file to "done" folder
+                Files.move(sourcePath, targetPath); // Move file
                 System.out.println("Moved file from " + sourcePath + " to " + targetPath);
             } catch (IOException e) {
-                System.out.println("Error moving file " + resource.getFilename() + ": " + e.getMessage());
+                System.err.println("Error moving file " + resource.getFilename() + ": " + e.getMessage());
             }
         }
         processedResources.clear();

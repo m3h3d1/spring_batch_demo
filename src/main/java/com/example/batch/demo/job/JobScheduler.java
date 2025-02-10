@@ -20,7 +20,7 @@ public class JobScheduler {
         this.job = job;
     }
 
-    @Scheduled(fixedRate = 20000, initialDelay = 20000) // 1 minutes in milliseconds
+    @Scheduled(fixedRate = 20000, initialDelay = 20000)
     public void scheduleJob() {
         System.out.println("Batch job has been started...");
         try {
@@ -34,7 +34,7 @@ public class JobScheduler {
         }
     }
 
-    void stopJob() {
+    public void stopJob() {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 }
