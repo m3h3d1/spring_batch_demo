@@ -187,6 +187,13 @@ public class BatchConfig {
                 System.out.println("Saving student to database: " + student);
                 studentRepository.save(student);
             }
+
+            try {
+                Thread.sleep(2000);  // Delay after writing each chunk
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Writing delay interrupted", e);
+            }
         };
     }
 }
