@@ -2,6 +2,7 @@ package com.example.batch.demo.config;
 
 import com.example.batch.demo.listener.FileMovingStepExecutionListener;
 import com.example.batch.demo.model.Student;
+import com.example.batch.demo.repository.StudentRepository;
 import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -43,12 +44,12 @@ public class BatchConfig {
 
     // Main Batch Job Configuration
     @Bean
-    public Job importStudentJob() {
+    public Job importStudentJob(StudentRepository studentRepository) {
         return jobBuilderFactory.get("importStudentJob")
                 .start(checkForFilesStep())
                 .on("NO_FILES").to(noOpStep())    // No files, go to noOpStep
                 .from(checkForFilesStep())
-                .on("*").to(studentStep())        // Files exist, process them
+                .on("*").to(studentStep(studentRepository))        // Files exist, process them
                 .end()
                 .build();
     }
@@ -72,12 +73,12 @@ public class BatchConfig {
 
     // Step 2: Process students
     @Bean
-    public Step studentStep() {
+    public Step studentStep(StudentRepository studentRepository) {
         return stepBuilderFactory.get("studentStep")
-                .<Student, Student>chunk(5)
+                .<Student, Student>chunk(2)
                 .reader(studentReader())
                 .processor(studentItemProcessor())
-                .writer(compositeItemWriter())
+                .writer(studentItemWriter(studentRepository))
                 .listener(new FileMovingStepExecutionListener(processedResources))
                 .build();
     }
@@ -171,16 +172,21 @@ public class BatchConfig {
     }
 
     // Writer Composite: Currently writing only to the database
-    @Bean
-    public CompositeItemWriter<Student> compositeItemWriter() {
-        CompositeItemWriter<Student> writer = new CompositeItemWriter<>();
-        writer.setDelegates(Collections.singletonList(studentItemWriter())); // Add more writers if needed
-        return writer;
-    }
+//    @Bean
+//    public CompositeItemWriter<Student> compositeItemWriter(StudentRepository studentRepository) {
+//        CompositeItemWriter<Student> writer = new CompositeItemWriter<>();
+//        writer.setDelegates(Collections.singletonList(studentItemWriter(studentRepository))); // Add more writers if needed
+//        return writer;
+//    }
 
     // Writer: Write to database
     @Bean
-    public ItemWriter<Student> studentItemWriter() {
-        return items -> items.forEach(student -> System.out.println("Writing student to database: " + student));
+    public ItemWriter<Student> studentItemWriter(StudentRepository studentRepository) {
+        return items -> {
+            for (Student student : items) {
+                System.out.println("Saving student to database: " + student);
+                studentRepository.save(student);
+            }
+        };
     }
 }
