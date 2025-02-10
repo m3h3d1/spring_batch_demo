@@ -2,7 +2,9 @@ package com.example.batch.demo.config;
 
 import com.example.batch.demo.listener.FileMovingStepExecutionListener;
 import com.example.batch.demo.model.Student;
+import com.example.batch.demo.model.Teacher;
 import com.example.batch.demo.repository.StudentRepository;
+import com.example.batch.demo.repository.TeacherRepository;
 import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -40,26 +42,40 @@ public class BatchConfig {
 
     private final List<Resource> processedResources = new ArrayList<>();
 
-    private static final String FILE_DIRECTORY = "file:D:/Integrations/batch-test/students/*.xml";
+    private static final String STUDENT_FILE_DIRECTORY = "file:D:/Integrations/batch-test/students/*.xml";
+    private static final String TEACHER_FILE_DIRECTORY = "file:D:/Integrations/batch-test/teachers/*.xml";
 
-    // Main Batch Job Configuration
+    // Main Batch Job Configuration for Students
     @Bean
     public Job importStudentJob(StudentRepository studentRepository) {
+        Step checkForFilesStep = checkForFilesStep(STUDENT_FILE_DIRECTORY);
         return jobBuilderFactory.get("importStudentJob")
-                .start(checkForFilesStep())
-                .on("NO_FILES").to(noOpStep())    // No files, go to noOpStep
-                .from(checkForFilesStep())
-                .on("*").to(studentStep(studentRepository))        // Files exist, process them
+                .start(checkForFilesStep)
+                .on("NO_FILES").to(noOpStep()) // No files, go to noOpStep
+                .from(checkForFilesStep)
+                .on("*").to(studentStep(studentRepository)) // Files exist, process them
+                .end()
+                .build();
+    }
+
+    // Main Batch Job Configuration for Teachers
+    @Bean
+    public Job importTeacherJob(TeacherRepository teacherRepository) {
+        Step checkForFilesStep = checkForFilesStep(TEACHER_FILE_DIRECTORY);
+        return jobBuilderFactory.get("importTeacherJob")
+                .start(checkForFilesStep)
+                .on("NO_FILES").to(noOpStep()) // No files, go to noOpStep
+                .from(checkForFilesStep)
+                .on("*").to(teacherStep(teacherRepository)) // Files exist, process them
                 .end()
                 .build();
     }
 
     // Step 1: Check if files are present
-    @Bean
-    public Step checkForFilesStep() {
+    public Step checkForFilesStep(String directory) {
         return stepBuilderFactory.get("checkForFilesStep")
                 .tasklet((contribution, chunkContext) -> {
-                    Resource[] resources = getResources();
+                    Resource[] resources = getResources(directory);
                     if (resources.length == 0) {
                         System.out.println("No files found.");
                         contribution.setExitStatus(new ExitStatus("NO_FILES"));
@@ -83,6 +99,18 @@ public class BatchConfig {
                 .build();
     }
 
+    // Step 2: Process teachers
+    @Bean
+    public Step teacherStep(TeacherRepository teacherRepository) {
+        return stepBuilderFactory.get("teacherStep")
+                .<Teacher, Teacher>chunk(2)
+                .reader(teacherReader())
+                .processor(teacherItemProcessor())
+                .writer(teacherItemWriter(teacherRepository))
+                .listener(new FileMovingStepExecutionListener(processedResources))
+                .build();
+    }
+
     // Fallback Step: Do nothing if no files are present
     @Bean
     public Step noOpStep() {
@@ -94,16 +122,16 @@ public class BatchConfig {
                 .build();
     }
 
-    // Reader for files
+    // Reader for student files
     @Bean
     @StepScope
     public ItemStreamReader<Student> studentReader() {
-        processedResources.clear();  // Clear the list for every job execution
-        Resource[] resources = getResources();
+        processedResources.clear(); // Clear the list for every job execution
+        Resource[] resources = getResources(STUDENT_FILE_DIRECTORY);
 
         if (resources.length == 0) { // Return an empty reader if no files are present
             System.out.println("No files found. Using empty reader.");
-            return emptyItemReader();
+            return emptyItemReaderStudent();
         }
 
         MultiResourceItemReader<Student> reader = new MultiResourceItemReader<>();
@@ -113,9 +141,28 @@ public class BatchConfig {
         return reader;
     }
 
+    // Reader for teacher files
+    @Bean
+    @StepScope
+    public ItemStreamReader<Teacher> teacherReader() {
+        processedResources.clear(); // Clear the list for every job execution
+        Resource[] resources = getResources(TEACHER_FILE_DIRECTORY);
+
+        if (resources.length == 0) { // Return an empty reader if no files are present
+            System.out.println("No files found. Using empty reader.");
+            return emptyItemReaderTeacher();
+        }
+
+        MultiResourceItemReader<Teacher> reader = new MultiResourceItemReader<>();
+        reader.setResources(resources);
+        reader.setDelegate(teacherItemReader());
+        processedResources.addAll(Arrays.asList(resources));
+        return reader;
+    }
+
     // Handle case with no resources
     @Bean
-    public ItemStreamReader<Student> emptyItemReader() {
+    public ItemStreamReader<Student> emptyItemReaderStudent() {
         return new ItemStreamReader<Student>() {
             @Override
             public Student read() {
@@ -123,24 +170,49 @@ public class BatchConfig {
             }
 
             @Override
-            public void open(ExecutionContext executionContext) { }
+            public void open(ExecutionContext executionContext) {
+            }
 
             @Override
-            public void update(ExecutionContext executionContext) { }
+            public void update(ExecutionContext executionContext) {
+            }
 
             @Override
-            public void close() { }
+            public void close() {
+            }
+        };
+    }
+
+    @Bean
+    public ItemStreamReader<Teacher> emptyItemReaderTeacher() {
+        return new ItemStreamReader<Teacher>() {
+            @Override
+            public Teacher read() {
+                return null;
+            }
+
+            @Override
+            public void open(ExecutionContext executionContext) {
+            }
+
+            @Override
+            public void update(ExecutionContext executionContext) {
+            }
+
+            @Override
+            public void close() {
+            }
         };
     }
 
     // Read resources from the directory
-    private Resource[] getResources() {
+    private Resource[] getResources(String directory) {
         try {
-            Resource[] resources = new PathMatchingResourcePatternResolver().getResources(FILE_DIRECTORY);
-            System.out.println("Detected files: " + Arrays.toString(resources));
+            Resource[] resources = new PathMatchingResourcePatternResolver().getResources(directory);
+            System.out.println("Detected files in directory " + directory + ": " + Arrays.toString(resources));
             return resources;
         } catch (IOException e) {
-            System.err.println("Error reading resources: " + e.getMessage());
+            System.err.println("Error reading resources from directory " + directory + ": " + e.getMessage());
             return new Resource[0];
         }
     }
@@ -155,6 +227,16 @@ public class BatchConfig {
         return reader;
     }
 
+    // XML Reader (specific to Teacher format)
+    @Bean
+    public StaxEventItemReader<Teacher> teacherItemReader() {
+        StaxEventItemReader<Teacher> reader = new StaxEventItemReader<>();
+        reader.setFragmentRootElementName("teacher");
+        reader.setUnmarshaller(teacherUnmarshaller());
+        reader.setStrict(true);
+        return reader;
+    }
+
     @Bean
     public Jaxb2Marshaller studentUnmarshaller() {
         Jaxb2Marshaller unmarshaller = new Jaxb2Marshaller();
@@ -162,7 +244,14 @@ public class BatchConfig {
         return unmarshaller;
     }
 
-    // Processor
+    @Bean
+    public Jaxb2Marshaller teacherUnmarshaller() {
+        Jaxb2Marshaller unmarshaller = new Jaxb2Marshaller();
+        unmarshaller.setClassesToBeBound(Teacher.class);
+        return unmarshaller;
+    }
+
+    // Processor for students
     @Bean
     public ItemProcessor<Student, Student> studentItemProcessor() {
         return student -> {
@@ -171,15 +260,16 @@ public class BatchConfig {
         };
     }
 
-    // Writer Composite: Currently writing only to the database
-//    @Bean
-//    public CompositeItemWriter<Student> compositeItemWriter(StudentRepository studentRepository) {
-//        CompositeItemWriter<Student> writer = new CompositeItemWriter<>();
-//        writer.setDelegates(Collections.singletonList(studentItemWriter(studentRepository))); // Add more writers if needed
-//        return writer;
-//    }
+    // Processor for teachers
+    @Bean
+    public ItemProcessor<Teacher, Teacher> teacherItemProcessor() {
+        return teacher -> {
+            System.out.println("Processing teacher: " + teacher);
+            return teacher;
+        };
+    }
 
-    // Writer: Write to database
+    // Writer: Write students to database
     @Bean
     public ItemWriter<Student> studentItemWriter(StudentRepository studentRepository) {
         return items -> {
@@ -189,7 +279,25 @@ public class BatchConfig {
             }
 
             try {
-                Thread.sleep(2000);  // Delay after writing each chunk
+                Thread.sleep(2000); // Delay after writing each chunk
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Writing delay interrupted", e);
+            }
+        };
+    }
+
+    // Writer: Write teachers to database
+    @Bean
+    public ItemWriter<Teacher> teacherItemWriter(TeacherRepository teacherRepository) {
+        return items -> {
+            for (Teacher teacher : items) {
+                System.out.println("Saving teacher to database: " + teacher);
+                teacherRepository.save(teacher);
+            }
+
+            try {
+                Thread.sleep(2000); // Delay after writing each chunk
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException("Writing delay interrupted", e);
