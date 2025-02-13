@@ -84,7 +84,8 @@ public class BatchConfig {
                     Resource[] resources = getResources(directory);
                     if (resources.length == 0) {
                         System.out.println("No files found.");
-                        contribution.setExitStatus(new ExitStatus("NO_FILES", "No files found in directory: " + directory));
+                        contribution
+                                .setExitStatus(new ExitStatus("NO_FILES", "No files found in directory: " + directory));
                     } else {
                         System.out.println("Files found for processing: " + Arrays.toString(resources));
                     }
@@ -141,9 +142,9 @@ public class BatchConfig {
         }
 
         MultiResourceItemReader<Student> reader = new MultiResourceItemReader<>();
-        reader.setResources(resources);
+        reader.setResources(new Resource[] { resources[0] }); // Only process the first file
         reader.setDelegate(studentItemReader());
-        processedResources.addAll(Arrays.asList(resources));
+        processedResources.add(resources[0]);
         return reader;
     }
 
@@ -160,9 +161,9 @@ public class BatchConfig {
         }
 
         MultiResourceItemReader<Teacher> reader = new MultiResourceItemReader<>();
-        reader.setResources(resources);
+        reader.setResources(new Resource[] { resources[0] }); // Only process the first file
         reader.setDelegate(teacherItemReader());
-        processedResources.addAll(Arrays.asList(resources));
+        processedResources.add(resources[0]);
         return reader;
     }
 
