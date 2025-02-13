@@ -24,7 +24,8 @@ public class JobStatusMonitor {
     // Method to start the job scheduler
     public void startScheduler() {
         if (!isSchedulerRunning) {
-            jobScheduler.scheduleJob();
+            jobScheduler.scheduleJobsForStudent();
+            jobScheduler.scheduleJobsForTeacher();
             isSchedulerRunning = true;
         }
     }
@@ -32,7 +33,7 @@ public class JobStatusMonitor {
     // Method to stop the job scheduler
     public void stopScheduler() {
         if (isSchedulerRunning) {
-            jobScheduler.stopJob();
+//            jobScheduler.stopJob();
             isSchedulerRunning = false;
         }
     }

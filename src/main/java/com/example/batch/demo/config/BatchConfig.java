@@ -1,6 +1,7 @@
 package com.example.batch.demo.config;
 
 import com.example.batch.demo.listener.FileMovingStepExecutionListener;
+import com.example.batch.demo.listener.JobLockListener;
 import com.example.batch.demo.model.Student;
 import com.example.batch.demo.model.Teacher;
 import com.example.batch.demo.repository.StudentRepository;
@@ -12,6 +13,7 @@ import org.springframework.batch.core.configuration.annotation.EnableBatchProces
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.core.listener.ChunkListenerSupport;
 import org.springframework.batch.item.*;
 import org.springframework.batch.item.file.MultiResourceItemReader;
 import org.springframework.batch.item.support.CompositeItemWriter;
@@ -20,6 +22,7 @@ import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.oxm.jaxb.Jaxb2Marshaller;
@@ -27,7 +30,6 @@ import org.springframework.oxm.jaxb.Jaxb2Marshaller;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 @Configuration
@@ -47,38 +49,42 @@ public class BatchConfig {
 
     // Main Batch Job Configuration for Students
     @Bean
+    @Lazy
     public Job importStudentJob(StudentRepository studentRepository) {
-        Step checkForFilesStep = checkForFilesStep(STUDENT_FILE_DIRECTORY);
+        Step checkForFilesStep = checkForFilesStep(STUDENT_FILE_DIRECTORY, "checkForStudentFilesStep");
         return jobBuilderFactory.get("importStudentJob")
                 .start(checkForFilesStep)
-                .on("NO_FILES").to(noOpStep()) // No files, go to noOpStep
+                .on("NO_FILES").fail() // No files, set exit status to fail
                 .from(checkForFilesStep)
                 .on("*").to(studentStep(studentRepository)) // Files exist, process them
                 .end()
+                .listener(new JobLockListener()) // Add JobLockListener
                 .build();
     }
 
     // Main Batch Job Configuration for Teachers
     @Bean
+    @Lazy
     public Job importTeacherJob(TeacherRepository teacherRepository) {
-        Step checkForFilesStep = checkForFilesStep(TEACHER_FILE_DIRECTORY);
+        Step checkForFilesStep = checkForFilesStep(TEACHER_FILE_DIRECTORY, "checkForTeacherFilesStep");
         return jobBuilderFactory.get("importTeacherJob")
                 .start(checkForFilesStep)
-                .on("NO_FILES").to(noOpStep()) // No files, go to noOpStep
+                .on("NO_FILES").fail() // No files, set exit status to fail
                 .from(checkForFilesStep)
                 .on("*").to(teacherStep(teacherRepository)) // Files exist, process them
                 .end()
+                .listener(new JobLockListener()) // Add JobLockListener
                 .build();
     }
 
     // Step 1: Check if files are present
-    public Step checkForFilesStep(String directory) {
-        return stepBuilderFactory.get("checkForFilesStep")
+    public Step checkForFilesStep(String directory, String stepName) {
+        return stepBuilderFactory.get(stepName)
                 .tasklet((contribution, chunkContext) -> {
                     Resource[] resources = getResources(directory);
                     if (resources.length == 0) {
                         System.out.println("No files found.");
-                        contribution.setExitStatus(new ExitStatus("NO_FILES"));
+                        contribution.setExitStatus(new ExitStatus("NO_FILES", "No files found in directory: " + directory));
                     } else {
                         System.out.println("Files found for processing: " + Arrays.toString(resources));
                     }
@@ -95,7 +101,7 @@ public class BatchConfig {
                 .reader(studentReader())
                 .processor(studentItemProcessor())
                 .writer(studentItemWriter(studentRepository))
-                .listener(new FileMovingStepExecutionListener(processedResources))
+                .listener(new FileMovingStepExecutionListener(processedResources)) // Add listener for every chunk
                 .build();
     }
 
@@ -103,7 +109,7 @@ public class BatchConfig {
     @Bean
     public Step teacherStep(TeacherRepository teacherRepository) {
         return stepBuilderFactory.get("teacherStep")
-                .<Teacher, Teacher>chunk(2)
+                .<Teacher, Teacher>chunk(4)
                 .reader(teacherReader())
                 .processor(teacherItemProcessor())
                 .writer(teacherItemWriter(teacherRepository))
@@ -270,7 +276,6 @@ public class BatchConfig {
     }
 
     // Writer: Write students to database
-    @Bean
     public ItemWriter<Student> studentItemWriter(StudentRepository studentRepository) {
         return items -> {
             for (Student student : items) {
@@ -288,7 +293,6 @@ public class BatchConfig {
     }
 
     // Writer: Write teachers to database
-    @Bean
     public ItemWriter<Teacher> teacherItemWriter(TeacherRepository teacherRepository) {
         return items -> {
             for (Teacher teacher : items) {

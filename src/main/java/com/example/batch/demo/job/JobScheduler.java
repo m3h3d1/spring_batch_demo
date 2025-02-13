@@ -6,6 +6,7 @@ import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +17,24 @@ public class JobScheduler {
     private final Job studentJob;
     private final Job teacherJob;
 
+    @Value("${student.job.fixedRate}")
+    private long studentJobFixedRate;
+
+    @Value("${student.job.initialDelay}")
+    private long studentJobInitialDelay;
+
+    @Value("${student.job.enabled}")
+    private boolean studentJobEnabled;
+
+    @Value("${teacher.job.fixedRate}")
+    private long teacherJobFixedRate;
+
+    @Value("${teacher.job.initialDelay}")
+    private long teacherJobInitialDelay;
+
+    @Value("${teacher.job.enabled}")
+    private boolean teacherJobEnabled;
+
     @Autowired
     public JobScheduler(JobLauncher jobLauncher,
                         @Qualifier("importStudentJob") Job studentJob,
@@ -25,28 +44,39 @@ public class JobScheduler {
         this.teacherJob = teacherJob;
     }
 
-    @Scheduled(fixedRate = 20000, initialDelay = 20000)
-    public void scheduleJobs() {
-        System.out.println("Batch jobs have been started...");
+    @Scheduled(fixedRateString = "${student.job.fixedRate}", initialDelayString = "${student.job.initialDelay}")
+    public void scheduleJobsForStudent() {
+        if (!studentJobEnabled) {
+            System.out.println("Student Batch jobs are disabled.");
+            return;
+        }
+        System.out.println("Student Batch jobs have been started...");
         try {
             JobParameters jobParameters = new JobParametersBuilder()
                     .addLong("timestamp", System.currentTimeMillis())
                     .toJobParameters();
             jobLauncher.run(studentJob, jobParameters);
-            jobLauncher.run(teacherJob, jobParameters);
-            System.out.println("Batch jobs have been triggered.");
+            System.out.println("Student Batch jobs have been triggered.");
         } catch (Exception e) {
-            System.err.println("Error while launching batch jobs: " + e.getMessage());
+            System.err.println("Error while launching Student batch jobs: " + e.getMessage());
         }
     }
 
-    public void scheduleJob() {
-        // Logic to schedule a job
-        System.out.println("Job scheduled.");
-    }
-
-    public void stopJob() {
-        // Logic to stop a job
-        System.out.println("Job stopped.");
+    @Scheduled(fixedRateString = "${teacher.job.fixedRate}", initialDelayString = "${teacher.job.initialDelay}")
+    public void scheduleJobsForTeacher() {
+        if (!teacherJobEnabled) {
+            System.out.println("Teacher Batch jobs are disabled.");
+            return;
+        }
+        System.out.println("Teacher Batch jobs have been started...");
+        try {
+            JobParameters jobParameters = new JobParametersBuilder()
+                    .addLong("timestamp", System.currentTimeMillis())
+                    .toJobParameters();
+            jobLauncher.run(teacherJob, jobParameters);
+            System.out.println("Teacher Batch jobs have been triggered.");
+        } catch (Exception e) {
+            System.err.println("Error while launching Teacher batch jobs: " + e.getMessage());
+        }
     }
 }

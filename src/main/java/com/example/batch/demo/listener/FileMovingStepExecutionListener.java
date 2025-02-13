@@ -1,10 +1,5 @@
 package com.example.batch.demo.listener;
 
-import org.springframework.batch.core.ExitStatus;
-import org.springframework.batch.core.StepExecution;
-import org.springframework.batch.core.listener.StepExecutionListenerSupport;
-import org.springframework.core.io.Resource;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,7 +7,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-public class FileMovingStepExecutionListener extends StepExecutionListenerSupport {
+import org.springframework.batch.core.listener.ChunkListenerSupport;
+import org.springframework.core.io.Resource;
+
+public class FileMovingStepExecutionListener extends ChunkListenerSupport {
 
     private final List<Resource> processedResources;
 
@@ -20,8 +18,23 @@ public class FileMovingStepExecutionListener extends StepExecutionListenerSuppor
         this.processedResources = processedResources;
     }
 
+    // @Override
+    // public ExitStatus afterStep(StepExecution stepExecution) {
+
+    //     return stepExecution.getExitStatus();
+    // }
+
     @Override
-    public ExitStatus afterStep(StepExecution stepExecution) {
+    public void beforeChunk(org.springframework.batch.core.scope.context.ChunkContext context) {
+        // Actions to perform before each chunk
+        System.out.println("Before chunk: " + context.getStepContext().getStepName());
+    }
+
+    @Override
+    public void afterChunk(org.springframework.batch.core.scope.context.ChunkContext context) {
+        // Actions to perform after each chunk
+        System.out.println("After chunk: " + context.getStepContext().getStepName());
+
         for (Resource resource : new ArrayList<>(processedResources)) {
             try {
                 if (!resource.exists()) {
@@ -48,6 +61,11 @@ public class FileMovingStepExecutionListener extends StepExecutionListenerSuppor
             }
         }
         processedResources.clear();
-        return stepExecution.getExitStatus();
+    }
+
+    @Override
+    public void afterChunkError(org.springframework.batch.core.scope.context.ChunkContext context) {
+        // Actions to perform in case of chunk error
+        System.err.println("Error in chunk: " + context.getStepContext().getStepName());
     }
 }
