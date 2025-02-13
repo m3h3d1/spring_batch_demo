@@ -18,7 +18,8 @@ public class Teacher {
 
     private String name;
     private int age;
-    private String grade;
+    private String subject;
+    private int experience;
 
     @XmlElement
     public String getName() {
@@ -39,12 +40,21 @@ public class Teacher {
     }
 
     @XmlElement
-    public String getGrade() {
-        return grade;
+    public String getSubject() {
+        return subject;
     }
 
-    public void setGrade(String grade) {
-        this.grade = grade;
+    public void setSubject(String subject) {
+        this.subject = subject;
+    }
+
+    @XmlElement
+    public int getExperience() {
+        return experience;
+    }
+
+    public void setExperience(int experience) {
+        this.experience = experience;
     }
 
     @Override
@@ -53,7 +63,8 @@ public class Teacher {
                 "id=" + id +
                 ", name='" + name + '\'' +
                 ", age=" + age +
-                ", grade='" + grade + '\'' +
+                ", subject='" + subject + '\'' +
+                ", experience=" + experience +
                 '}';
     }
 }

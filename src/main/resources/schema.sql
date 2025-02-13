@@ -98,5 +98,7 @@ CREATE TABLE student (
 CREATE TABLE teacher (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    age INT NOT NULL
+    age INT NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    experience INT NOT NULL
 );
