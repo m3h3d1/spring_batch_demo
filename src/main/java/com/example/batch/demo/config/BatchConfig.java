@@ -1,11 +1,10 @@
 package com.example.batch.demo.config;
 
-import com.example.batch.demo.listener.FileMovingStepExecutionListener;
-import com.example.batch.demo.listener.JobLockListener;
-import com.example.batch.demo.model.Student;
-import com.example.batch.demo.model.Teacher;
-import com.example.batch.demo.repository.StudentRepository;
-import com.example.batch.demo.repository.TeacherRepository;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -13,13 +12,15 @@ import org.springframework.batch.core.configuration.annotation.EnableBatchProces
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
-import org.springframework.batch.core.listener.ChunkListenerSupport;
-import org.springframework.batch.item.*;
+import org.springframework.batch.item.ExecutionContext;
+import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.ItemStreamReader;
+import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.MultiResourceItemReader;
-import org.springframework.batch.item.support.CompositeItemWriter;
 import org.springframework.batch.item.xml.StaxEventItemReader;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -27,10 +28,12 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.oxm.jaxb.Jaxb2Marshaller;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import com.example.batch.demo.listener.FileMovingStepExecutionListener;
+import com.example.batch.demo.listener.JobLockListener;
+import com.example.batch.demo.model.Student;
+import com.example.batch.demo.model.Teacher;
+import com.example.batch.demo.repository.StudentRepository;
+import com.example.batch.demo.repository.TeacherRepository;
 
 @Configuration
 @EnableBatchProcessing
@@ -50,6 +53,7 @@ public class BatchConfig {
     // Main Batch Job Configuration for Students
     @Bean
     @Lazy
+    @ConditionalOnProperty(name = "student.job.enabled", havingValue = "true", matchIfMissing = true)
     public Job importStudentJob(StudentRepository studentRepository) {
         Step checkForFilesStep = checkForFilesStep(STUDENT_FILE_DIRECTORY, "checkForStudentFilesStep");
         return jobBuilderFactory.get("importStudentJob")
@@ -65,6 +69,7 @@ public class BatchConfig {
     // Main Batch Job Configuration for Teachers
     @Bean
     @Lazy
+    @ConditionalOnProperty(name = "teacher.job.enabled", havingValue = "true", matchIfMissing = true)
     public Job importTeacherJob(TeacherRepository teacherRepository) {
         Step checkForFilesStep = checkForFilesStep(TEACHER_FILE_DIRECTORY, "checkForTeacherFilesStep");
         return jobBuilderFactory.get("importTeacherJob")
